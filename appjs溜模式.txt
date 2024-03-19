@@ -1,0 +1,70 @@
+const express = require('express');
+const bodyParser = require('body-parser');
+const axios = require('axios');
+const cors = require('cors');
+
+const app = express();
+const port = 3000;
+
+const API_KEY = 'sk-1H70IYW9nj8Xyadw9bF5448e204d4560A4Cf2947C6D58d66';
+const API_URL = 'https://www.gptapi.us/v1/chat/completions';
+
+app.use(cors());
+app.use(bodyParser.json());
+
+app.post('/chat', async (req, res) => {
+    const { model, messages } = req.body;
+
+    try {
+        const response = await axios.post(API_URL, {
+            model: model,
+            messages: messages,
+            max_tokens: 150,
+            n: 1,
+            stop: null,
+            temperature: 0.8,
+            stream: true,
+        }, {
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${API_KEY}`,
+            },
+            responseType: 'stream',
+        });
+
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+        });
+
+        response.data.on('data', (chunk) => {
+            const lines = chunk.toString().split('\n').filter((line) => line.trim() !== '');
+            for (const line of lines) {
+                const message = line.replace(/^data: /, '');
+                if (message === '[DONE]') {
+                    res.write(`data: [DONE]\n\n`);
+                    res.end();
+                    break;
+                }
+                try {
+                    const parsed = JSON.parse(message);
+                    const content = parsed.choices[0].delta.content;
+                    if (content) {
+                        res.write(`data: ${content}\n\n`);
+                    }
+                } catch (error) {
+                    console.error('Error parsing message:', message, error);
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error:', error.response ? error.response.data : error.message);
+        res.status(500).json({ error: 'An error occurred', details: error.response ? error.response.data : error.message });
+    }
+});
+
+app.listen(port, () => {
+    console.log(`Server is running on port ${port}`);
+});
+能流模式
