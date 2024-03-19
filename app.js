@@ -26,17 +26,23 @@ app.use(bodyParser.json());
 
 // 用户注册
 app.post('/register', async (req, res) => {
-    const { email, password, activationCode } = req.body;
+    const { email, password } = req.body;
     try {
         const connection = await mysql.createConnection(dbConfig);
         const hashedPassword = await bcrypt.hash(password, 10);
-        await connection.execute('INSERT INTO users (email, password, activation_code) VALUES (?, ?, ?)', [email, hashedPassword, activationCode]);
+
+        await connection.execute('INSERT INTO users (email, password) VALUES (?, ?)', [email, hashedPassword]);
         res.json({ message: 'User registered successfully!' });
     } catch (error) {
         console.error('Error:', error.message);
+        // 对于唯一约束违反（如邮箱已存在）的特殊处理
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ error: 'Email already exists' });
+        }
         res.status(500).json({ error: 'An error occurred', details: error.message });
     }
 });
+
 
 // 用户登录
 app.post('/login', async (req, res) => {
